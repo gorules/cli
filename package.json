@@ -1,0 +1,52 @@
+{
+  "name": "@gorules/cli",
+  "version": "0.1.0",
+  "description": "Command-line tool for the GoRules BRMS platform",
+  "homepage": "https://gorules.io",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/gorules/cli"
+  },
+  "keywords": [
+    "gorules",
+    "brms",
+    "business-rules",
+    "decision-engine",
+    "decision-tables",
+    "rules-engine",
+    "cli"
+  ],
+  "license": "MIT",
+  "author": "GoRules <hi@gorules.io> (https://gorules.io)",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "build": "rolldown -c rolldown.config.ts",
+    "dev": "pnpm run build && node dist/main.js",
+    "lint": "eslint .",
+    "format:fix": "prettier . --write"
+  },
+  "bin": {
+    "gorules": "dist/main.js"
+  },
+  "devDependencies": {
+    "@clack/prompts": "^1.0.1",
+    "@eslint/js": "^10.0.1",
+    "@hono/node-server": "^1.19.9",
+    "@modelcontextprotocol/sdk": "^1.27.1",
+    "@types/node": "^25.3.2",
+    "@types/ws": "^8.18.1",
+    "boxen": "^8.0.1",
+    "citty": "^0.2.1",
+    "eslint": "^10.0.2",
+    "hono": "^4.12.3",
+    "nanoid": "^5.1.6",
+    "picocolors": "^1.1.1",
+    "prettier": "^3.8.1",
+    "rolldown": "1.0.0-rc.6",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.56.1",
+    "ws": "^8.19.0",
+    "zod": "^4.3.6"
+  }
+}

@@ -81,68 +81,72 @@ export async function startBridge(opts: BridgeOptions) {
   const mcp = new BridgeMcpServer(callTool, callEvaluate, callGetFile);
 
   // WebSocket server shares the same HTTP server
-  const ws = new BridgeWSServer(mcp.httpServer, {
-    onConnected: (m) => {
-      manifest = m;
-      mcp.registerTools(m.tools);
-      logConnect(m.project.name, m.tools.length);
-    },
+  const ws = new BridgeWSServer(
+    mcp.httpServer,
+    {
+      onConnected: (m) => {
+        manifest = m;
+        mcp.registerTools(m.tools);
+        logConnect(m.project.name, m.tools.length);
+      },
 
-    onDisconnected: (reason) => {
-      manifest = null;
-      mcp.clearTools();
-      for (const [id, pending] of pendingCalls) {
-        clearTimeout(pending.timer);
-        pending.reject(new Error('Browser disconnected'));
-        pendingCalls.delete(id);
-      }
-      logDisconnect(reason);
-    },
+      onDisconnected: (reason) => {
+        manifest = null;
+        mcp.clearTools();
+        for (const [id, pending] of pendingCalls) {
+          clearTimeout(pending.timer);
+          pending.reject(new Error('Browser disconnected'));
+          pendingCalls.delete(id);
+        }
+        logDisconnect(reason);
+      },
 
-    onToolResult: (requestId, result) => {
-      const pending = pendingCalls.get(requestId);
-      if (pending) {
-        clearTimeout(pending.timer);
-        const duration = Math.round(performance.now() - pending.startedAt);
-        pending.resolve(result);
-        pendingCalls.delete(requestId);
-        logToolCall(pending.name, duration);
-      }
-    },
+      onToolResult: (requestId, result) => {
+        const pending = pendingCalls.get(requestId);
+        if (pending) {
+          clearTimeout(pending.timer);
+          const duration = Math.round(performance.now() - pending.startedAt);
+          pending.resolve(result);
+          pendingCalls.delete(requestId);
+          logToolCall(pending.name, duration);
+        }
+      },
 
-    onToolError: (requestId, error) => {
-      const pending = pendingCalls.get(requestId);
-      if (pending) {
-        clearTimeout(pending.timer);
-        pending.reject(new Error(error));
-        pendingCalls.delete(requestId);
-      }
-    },
+      onToolError: (requestId, error) => {
+        const pending = pendingCalls.get(requestId);
+        if (pending) {
+          clearTimeout(pending.timer);
+          pending.reject(new Error(error));
+          pendingCalls.delete(requestId);
+        }
+      },
 
-    onEvaluateResult: (requestId, response) => {
-      const pending = pendingCalls.get(requestId);
-      if (pending) {
-        clearTimeout(pending.timer);
-        const duration = Math.round(performance.now() - pending.startedAt);
-        pending.resolve(response);
-        pendingCalls.delete(requestId);
-        logEvent(`Evaluate completed (${duration}ms)`);
-      }
-    },
+      onEvaluateResult: (requestId, response) => {
+        const pending = pendingCalls.get(requestId);
+        if (pending) {
+          clearTimeout(pending.timer);
+          const duration = Math.round(performance.now() - pending.startedAt);
+          pending.resolve(response);
+          pendingCalls.delete(requestId);
+          logEvent(`Evaluate completed (${duration}ms)`);
+        }
+      },
 
-    onGetFileResult: (requestId, response) => {
-      const pending = pendingCalls.get(requestId);
-      if (pending) {
-        clearTimeout(pending.timer);
-        const duration = Math.round(performance.now() - pending.startedAt);
-        pending.resolve(response);
-        pendingCalls.delete(requestId);
-        logEvent(`Get file completed (${duration}ms)`);
-      }
-    },
+      onGetFileResult: (requestId, response) => {
+        const pending = pendingCalls.get(requestId);
+        if (pending) {
+          clearTimeout(pending.timer);
+          const duration = Math.round(performance.now() - pending.startedAt);
+          pending.resolve(response);
+          pendingCalls.delete(requestId);
+          logEvent(`Get file completed (${duration}ms)`);
+        }
+      },
 
-    onProgress: () => {},
-  }, token);
+      onProgress: () => {},
+    },
+    token,
+  );
 
   await mcp.listen(opts.port, opts.host);
   printBanner(opts.host, opts.port, token);

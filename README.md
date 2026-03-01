@@ -15,6 +15,7 @@ npx @gorules/cli mcp start
 ```
 
 ## MCP Bridge
+
 2
 The CLI includes an MCP (Model Context Protocol) bridge that connects AI tools like Claude, Cursor, and Windsurf to the GoRules decision graph editor.
 
@@ -32,12 +33,12 @@ This starts a local server on `localhost:41919` that:
 
 ### Options
 
-| Flag | Description | Default |
-| --- | --- | --- |
-| `-p, --port` | Server port | `41919` |
-| `-h, --host` | Server host | `localhost` |
-| `-u, --url` | GoRules server URL | — |
-| `--open` | Open browser on start | `false` |
+| Flag         | Description           | Default     |
+| ------------ | --------------------- | ----------- |
+| `-p, --port` | Server port           | `41919`     |
+| `-h, --host` | Server host           | `localhost` |
+| `-u, --url`  | GoRules server URL    | —           |
+| `--open`     | Open browser on start | `false`     |
 
 ### Connecting
 

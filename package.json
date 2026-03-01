@@ -30,6 +30,7 @@
     "dev": "pnpm run build && node dist/main.js",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
+    "format": "prettier . --check",
     "format:fix": "prettier . --write"
   },
   "bin": {

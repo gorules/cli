@@ -29,6 +29,7 @@
     "build": "rolldown -c rolldown.config.ts",
     "dev": "pnpm run build && node dist/main.js",
     "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
     "format:fix": "prettier . --write"
   },
   "bin": {

@@ -72,20 +72,19 @@ export class BridgeMcpServer {
     // writing response headers after StreamableHTTPServerTransport already has.
     const honoListener = getRequestListener(app.fetch);
 
-    this.httpServer = createServer(async (incoming, outgoing) => {
+    this.httpServer = createServer((incoming, outgoing) => {
       const url = incoming.url || '';
       if (url === '/mcp' || url.startsWith('/mcp?')) {
-        try {
-          await this.handleMcpRequest(incoming, outgoing);
-        } catch {
+        this.handleMcpRequest(incoming, outgoing).catch(() => {
           if (!outgoing.headersSent) {
             outgoing.writeHead(500);
             outgoing.end('Internal server error');
           }
-        }
+        });
         return;
       }
-      honoListener(incoming, outgoing);
+
+      void honoListener(incoming, outgoing);
     });
   }
 

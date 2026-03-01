@@ -1,0 +1,40 @@
+name: 'Validate'
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  codequality:
+    name: 'Code quality'
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          persist-credentials: false
+
+      - name: Install Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 24
+
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 10
+          run_install: true
+
+      - name: 'Lint'
+        run: pnpm lint
+
+      - name: 'Format'
+        run: pnpm format
+
+      - name: 'Typecheck'
+        run: pnpm typecheck

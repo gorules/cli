@@ -18,6 +18,11 @@
   ],
   "license": "MIT",
   "author": "GoRules <hi@gorules.io> (https://gorules.io)",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "main": "dist/index.js",
   "type": "module",
   "scripts": {

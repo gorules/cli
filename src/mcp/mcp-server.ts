@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { getRequestListener } from '@hono/node-server';
+import type { IncomingMessage, Server as HttpServer, ServerResponse } from 'node:http';
 import { createServer } from 'node:http';
-import type { Server as HttpServer, IncomingMessage, ServerResponse } from 'node:http';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
@@ -181,7 +181,7 @@ export class BridgeMcpServer {
           content: [
             {
               type: 'text' as const,
-              text: typeof result === 'string' ? result : JSON.stringify(result, null, 2),
+              text: typeof result === 'string' ? result : JSON.stringify(result),
             },
           ],
         };

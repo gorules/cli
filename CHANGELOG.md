@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/gorules/cli/compare/cli-v0.2.1...cli-v0.3.0) (2026-08-16)
+
+
+### Features
+
+* pull command ([#5](https://github.com/gorules/cli/issues/5)) ([3bcd66c](https://github.com/gorules/cli/commit/3bcd66cfd03d820ee358b9763b4998c38f918171))
+
 ## [0.2.1](https://github.com/gorules/cli/compare/cli-v0.2.0...cli-v0.2.1) (2026-03-20)
 
 ### Bug Fixes

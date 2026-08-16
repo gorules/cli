@@ -6,7 +6,7 @@ branding:
 
 inputs:
   url:
-    description: BRMS URL, e.g. https://acme.gorules.io
+    description: BRMS URL, e.g. https://acme.us1.gorules.io
     required: true
   token:
     description: Access token. Pass a secret, never a literal

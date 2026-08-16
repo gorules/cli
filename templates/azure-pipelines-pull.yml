@@ -11,7 +11,7 @@
 #   jobs:
 #     - template: templates/azure-pipelines-pull.yml@gorules
 #       parameters:
-#         url: https://acme.gorules.io
+#         url: https://acme.us1.gorules.io
 #         project: pricing
 #         target: env:production
 #         container: rules

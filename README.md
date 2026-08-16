@@ -21,7 +21,7 @@ building block for shipping rules from BRMS into your own infrastructure: a CI j
 artifact and uploads it wherever your runtime reads it from.
 
 ```bash
-export GORULES_URL=https://acme.gorules.io
+export GORULES_URL=https://acme.us1.gorules.io
 export GORULES_TOKEN=...            # project access token, read scope is enough
 
 gorules pull --project pricing --target env:production --out ./dist
@@ -149,7 +149,7 @@ jobs:
       - uses: gorules/cli/actions/pull@cli-v0.2.1
         id: rules
         with:
-          url: https://acme.gorules.io
+          url: https://acme.us1.gorules.io
           token: ${{ secrets.GORULES_TOKEN }}
           project: pricing
           target: env:production
@@ -229,7 +229,7 @@ resources:
 jobs:
   - template: templates/azure-pipelines-pull.yml@gorules
     parameters:
-      url: https://acme.gorules.io
+      url: https://acme.us1.gorules.io
       project: pricing
       target: env:production
       azureSubscription: <your ARM service connection>

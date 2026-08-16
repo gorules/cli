@@ -2,10 +2,9 @@
 
 ## [0.2.1](https://github.com/gorules/cli/compare/cli-v0.2.0...cli-v0.2.1) (2026-03-20)
 
-
 ### Bug Fixes
 
-* improve mcp context size ([#3](https://github.com/gorules/cli/issues/3)) ([5044971](https://github.com/gorules/cli/commit/5044971f8a7cce38b1acbfbb0e27ab433297c321))
+- improve mcp context size ([#3](https://github.com/gorules/cli/issues/3)) ([5044971](https://github.com/gorules/cli/commit/5044971f8a7cce38b1acbfbb0e27ab433297c321))
 
 ## [0.2.0](https://github.com/gorules/cli/compare/cli-v0.1.0...cli-v0.2.0) (2026-03-01)
 

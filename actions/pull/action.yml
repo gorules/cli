@@ -1,0 +1,139 @@
+name: GoRules Pull
+description: Download a rules artifact from GoRules BRMS so a pipeline can publish it to your own infrastructure
+branding:
+  icon: download
+  color: blue
+
+inputs:
+  url:
+    description: BRMS URL, e.g. https://acme.gorules.io
+    required: true
+  token:
+    description: Access token. Pass a secret, never a literal
+    required: true
+  project:
+    description: Project key or id. Optional when payload is set
+    required: false
+    default: ''
+  target:
+    description: "'main', 'branch:<id>', 'commit:<id>', 'release:<version>' or 'env:<key>'"
+    required: false
+    default: main
+  out:
+    description: Output directory
+    required: false
+    default: .
+  name:
+    description: Output file name, or sub-directory name when unpack is true. Defaults to the project key with no extension
+    required: false
+    default: ''
+  unpack:
+    description: Extract the archive instead of writing it
+    required: false
+    default: 'false'
+  delete:
+    description: With unpack, delete files in the destination that are not in the artifact so it mirrors the target exactly
+    required: false
+    default: 'false'
+  current:
+    description: Release or commit id already held. When it still matches, nothing is downloaded and changed is false
+    required: false
+    default: ''
+  payload:
+    description: BRMS webhook payload. Auto-detected from the workflow_dispatch event; set explicitly only to override
+    required: false
+    default: ''
+  cli-version:
+    description: Version of @gorules/cli to run. Pin this in production
+    required: false
+    default: 0.2.1 # x-release-please-version
+
+outputs:
+  changed:
+    description: 'false when the target still matches the current input, true when an artifact was downloaded'
+    value: ${{ steps.pull.outputs.changed }}
+  release:
+    description: Release id, when the target resolved to a release
+    value: ${{ steps.pull.outputs.release }}
+  version:
+    description: Release version, when the target resolved to a release
+    value: ${{ steps.pull.outputs.version }}
+  commit:
+    description: Commit id, when the target resolved to a commit
+    value: ${{ steps.pull.outputs.commit }}
+  sha256:
+    description: Checksum of the downloaded artifact
+    value: ${{ steps.pull.outputs.sha256 }}
+  files:
+    description: JSON array of the paths written
+    value: ${{ steps.pull.outputs.files }}
+
+runs:
+  using: composite
+  steps:
+    - id: pull
+      shell: bash
+      env:
+        # Credentials travel as environment, never as arguments: anything on
+        # the command line is visible to other processes and lands in traces.
+        GORULES_URL: ${{ inputs.url }}
+        GORULES_TOKEN: ${{ inputs.token }}
+        GORULES_PROJECT: ${{ inputs.project }}
+        GORULES_TARGET: ${{ inputs.target }}
+        INPUT_OUT: ${{ inputs.out }}
+        INPUT_NAME: ${{ inputs.name }}
+        INPUT_UNPACK: ${{ inputs.unpack }}
+        INPUT_DELETE: ${{ inputs.delete }}
+        INPUT_CURRENT: ${{ inputs.current }}
+        INPUT_PAYLOAD: ${{ inputs.payload }}
+        CLI_VERSION: ${{ inputs['cli-version'] }}
+      run: |
+        set -euo pipefail
+        echo "::add-mask::$GORULES_TOKEN"
+
+        # BRMS passes the event payload via workflow_dispatch; the project and
+        # target then come from the event rather than static configuration.
+        # The workflow only has to declare the `payload` input - the action
+        # reads it from the event itself, no pass-through needed.
+        if [ -z "$INPUT_PAYLOAD" ] && [ -f "${GITHUB_EVENT_PATH:-}" ]; then
+          INPUT_PAYLOAD=$(jq -r '.inputs.payload // empty' "$GITHUB_EVENT_PATH")
+        fi
+        if [ -n "$INPUT_PAYLOAD" ]; then
+          GORULES_PROJECT=$(jq -r '.project.key // .projectId // empty' <<<"$INPUT_PAYLOAD")
+          GORULES_TARGET=$(jq -r '.target // "main"' <<<"$INPUT_PAYLOAD")
+          export GORULES_PROJECT GORULES_TARGET
+          echo "Triggered by BRMS: $GORULES_PROJECT -> $GORULES_TARGET"
+        fi
+
+        if [ -z "${GORULES_PROJECT:-}" ]; then
+          echo "Either the project input or a payload is required." >&2
+          exit 2
+        fi
+
+        args=(pull --out "$INPUT_OUT" --json)
+        [ -n "$INPUT_NAME" ] && args+=(--name "$INPUT_NAME")
+        [ -n "$INPUT_CURRENT" ] && args+=(--current "$INPUT_CURRENT")
+        [ "$INPUT_UNPACK" = "true" ] && args+=(--unpack)
+        [ "$INPUT_DELETE" = "true" ] && args+=(--delete)
+
+        result="$RUNNER_TEMP/gorules-pull.json"
+
+        # Exit 3 means the target has not moved. That is a normal outcome for a
+        # scheduled job, so it becomes an output rather than a failed step.
+        set +e
+        npx --yes "@gorules/cli@${CLI_VERSION}" "${args[@]}" > "$result"
+        code=$?
+        set -e
+
+        if [ "$code" -eq 3 ]; then
+          echo "changed=false" >> "$GITHUB_OUTPUT"
+          echo "Target unchanged, nothing downloaded."
+          exit 0
+        fi
+        [ "$code" -ne 0 ] && exit "$code"
+
+        echo "changed=true" >> "$GITHUB_OUTPUT"
+        for key in release version commit sha256; do
+          echo "$key=$(jq -r --arg k "$key" '.[$k] // ""' "$result")" >> "$GITHUB_OUTPUT"
+        done
+        echo "files=$(jq -c '.files' "$result")" >> "$GITHUB_OUTPUT"

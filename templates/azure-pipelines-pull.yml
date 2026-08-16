@@ -1,0 +1,138 @@
+# Azure Pipelines template: pull a rules artifact and publish it to Blob Storage.
+#
+#   resources:
+#     repositories:
+#       - repository: gorules
+#         type: github
+#         name: gorules/cli
+#         ref: refs/tags/cli-v0.2.1
+#         endpoint: <your GitHub service connection>
+#
+#   jobs:
+#     - template: templates/azure-pipelines-pull.yml@gorules
+#       parameters:
+#         url: https://acme.gorules.io
+#         project: pricing
+#         target: env:production
+#         container: rules
+#         storageAccount: acmerules
+#         azureSubscription: <your ARM service connection>
+#
+# GORULES_TOKEN must exist as a secret variable, either in the pipeline or in a
+# linked variable group.
+#
+# For BRMS-triggered runs, the pipeline must accept the GRL_PAYLOAD variable at
+# queue time: add a pipeline variable named GRL_PAYLOAD (any value) with "Let
+# users override this value when running this pipeline" checked. Organizations
+# with "Limit variables that can be set at queue time" enabled (the default on
+# newer organizations) reject the queue request otherwise.
+
+parameters:
+  - name: url
+    type: string
+  - name: project
+    type: string
+  - name: target
+    type: string
+    default: main
+  - name: out
+    type: string
+    default: $(Build.ArtifactStagingDirectory)/rules
+  - name: name
+    type: string
+    default: ''
+  - name: unpack
+    type: boolean
+    default: false
+  # With unpack, deletes files in the destination that are not in the artifact
+  - name: delete
+    type: boolean
+    default: false
+  - name: cliVersion
+    type: string
+    default: 0.2.1 # x-release-please-version
+  - name: azureSubscription
+    type: string
+    default: ''
+  - name: storageAccount
+    type: string
+    default: ''
+  - name: container
+    type: string
+    default: ''
+  - name: prefix
+    type: string
+    default: rules/live
+
+jobs:
+  - job: gorules_pull
+    displayName: Pull rules from GoRules
+    pool:
+      vmImage: ubuntu-latest
+    steps:
+      # Microsoft-hosted images already ship Node; self-hosted agents may not.
+      - task: NodeTool@0
+        displayName: Use Node 20
+        inputs:
+          versionSpec: '20.x'
+
+      - script: |
+          set -euo pipefail
+
+          # BRMS passes GRL_PAYLOAD when it triggers the run, so the same
+          # template serves a manual run and a webhook-driven one. On a manual
+          # run the macro below does not resolve and Azure leaves the literal
+          # '$(GRL_PAYLOAD)' in place, so that exact string means "not set".
+          if [ -n "${GRL_PAYLOAD:-}" ] && [ "${GRL_PAYLOAD}" != '$(GRL_PAYLOAD)' ]; then
+            GORULES_PROJECT=$(node -e 'const p=JSON.parse(process.env.GRL_PAYLOAD);process.stdout.write(p.project?.key||p.projectId||"")')
+            GORULES_TARGET=$(node -e 'const p=JSON.parse(process.env.GRL_PAYLOAD);process.stdout.write(p.target||"main")')
+            export GORULES_PROJECT GORULES_TARGET
+            echo "Triggered by BRMS: $GORULES_PROJECT $GORULES_TARGET"
+          fi
+
+          args=(pull --out "${{ parameters.out }}" --json)
+          if [ -n "${{ parameters.name }}" ]; then args+=(--name "${{ parameters.name }}"); fi
+          if [ "${{ lower(parameters.unpack) }}" = "true" ]; then args+=(--unpack); fi
+          if [ "${{ lower(parameters.delete) }}" = "true" ]; then args+=(--delete); fi
+
+          # Exit 3 means the target has not moved: a normal outcome, not a failure
+          set +e
+          npx --yes "@gorules/cli@${{ parameters.cliVersion }}" "${args[@]}" > result.json
+          code=$?
+          set -e
+
+          if [ "$code" -eq 3 ]; then
+            echo "##vso[task.setvariable variable=rulesChanged]false"
+            echo "Target unchanged, nothing downloaded."
+            exit 0
+          fi
+          [ "$code" -ne 0 ] && exit "$code"
+
+          echo "##vso[task.setvariable variable=rulesChanged]true"
+          echo "##vso[task.setvariable variable=rulesVersion]$(node -p "require('./result.json').version || ''")"
+        displayName: gorules pull
+        env:
+          GORULES_URL: ${{ parameters.url }}
+          GORULES_PROJECT: ${{ parameters.project }}
+          GORULES_TARGET: ${{ parameters.target }}
+          # Secret variables are NOT mapped into the environment automatically;
+          # without this line the token is simply absent.
+          GORULES_TOKEN: $(GORULES_TOKEN)
+          # Empty on a manual run; set by BRMS when it queues the pipeline
+          GRL_PAYLOAD: $(GRL_PAYLOAD)
+
+      - task: AzureCLI@2
+        displayName: Upload to Blob Storage
+        condition: and(succeeded(), eq(variables['rulesChanged'], 'true'), ne('${{ parameters.container }}', ''))
+        inputs:
+          azureSubscription: ${{ parameters.azureSubscription }}
+          scriptType: bash
+          scriptLocation: inlineScript
+          inlineScript: |
+            set -euo pipefail
+            az storage blob upload-batch \
+              --account-name "${{ parameters.storageAccount }}" \
+              --destination "${{ parameters.container }}/${{ parameters.prefix }}" \
+              --source "${{ parameters.out }}" \
+              --auth-mode login \
+              --overwrite

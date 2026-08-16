@@ -21,7 +21,9 @@
   "files": [
     "dist",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "actions",
+    "templates"
   ],
   "main": "dist/index.js",
   "type": "module",

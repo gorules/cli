@@ -1,0 +1,68 @@
+# GitLab CI template: pull a rules artifact and publish it to your own storage.
+#
+#   include:
+#     - remote: 'https://raw.githubusercontent.com/gorules/cli/cli-v0.2.1/templates/gitlab-ci-pull.yml'
+#
+#   pull:rules:
+#     extends: .gorules-pull
+#     variables:
+#       GORULES_PROJECT: pricing
+#       GORULES_TARGET: env:production
+#
+# GORULES_URL and GORULES_TOKEN come from CI/CD variables; mask and protect the
+# token. GitLab puts CI/CD variables in the environment automatically, so the
+# CLI picks them up with no further wiring.
+#
+# When BRMS triggers the pipeline it passes GRL_PAYLOAD, and the project and
+# target are taken from that instead, so the same job serves both a manual run
+# and a webhook-driven one.
+
+.gorules-pull:
+  image: node:20-alpine
+  variables:
+    GORULES_OUT: dist
+    GORULES_CLI_VERSION: '0.2.1' # x-release-please-version
+    GORULES_UNPACK: 'false'
+    # 'true' deletes files in the destination that are not in the artifact
+    GORULES_DELETE: 'false'
+  script:
+    - |
+      set -eu
+
+      if [ -n "${GRL_PAYLOAD:-}" ]; then
+        GORULES_PROJECT=$(printf '%s' "$GRL_PAYLOAD" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const p=JSON.parse(s);process.stdout.write(p.project?.key||p.projectId||"")})')
+        GORULES_TARGET=$(printf '%s' "$GRL_PAYLOAD" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const p=JSON.parse(s);process.stdout.write(p.target||"main")})')
+        export GORULES_PROJECT GORULES_TARGET
+        echo "Triggered by BRMS: $GORULES_PROJECT $GORULES_TARGET"
+      fi
+
+      set -- pull --out "$GORULES_OUT" --json
+      if [ -n "${GORULES_NAME:-}" ]; then set -- "$@" --name "$GORULES_NAME"; fi
+      if [ -n "${GORULES_CURRENT:-}" ]; then set -- "$@" --current "$GORULES_CURRENT"; fi
+      if [ "${GORULES_UNPACK}" = "true" ]; then set -- "$@" --unpack; fi
+      if [ "${GORULES_DELETE}" = "true" ]; then set -- "$@" --delete; fi
+
+      # Exit 3 means the target has not moved: a normal outcome, not a failure
+      set +e
+      npx --yes "@gorules/cli@${GORULES_CLI_VERSION}" "$@" > result.json
+      code=$?
+      set -e
+
+      if [ "$code" -eq 3 ]; then
+        echo "RULES_CHANGED=false" > gorules.env
+        echo "Target unchanged, nothing downloaded."
+        exit 0
+      fi
+      if [ "$code" -ne 0 ]; then exit "$code"; fi
+
+      {
+        echo "RULES_CHANGED=true"
+        node -e 'const r=require("./result.json");console.log("RULES_VERSION="+(r.version||""));console.log("RULES_RELEASE="+(r.release||""));console.log("RULES_SHA256="+(r.sha256||""))'
+      } > gorules.env
+      cat gorules.env
+  artifacts:
+    paths:
+      - $GORULES_OUT
+    # Downstream jobs read RULES_CHANGED / RULES_VERSION as ordinary variables
+    reports:
+      dotenv: gorules.env

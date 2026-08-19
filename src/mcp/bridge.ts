@@ -152,7 +152,7 @@ export async function startBridge(opts: BridgeOptions) {
   printBanner(opts.host, opts.port, token);
 
   if (opts.openBrowser && opts.serverUrl) {
-    const { exec } = await import('node:child_process');
-    exec(`open "${opts.serverUrl}"`);
+    const { execFile } = await import('node:child_process');
+    execFile('open', [opts.serverUrl]);
   }
 }

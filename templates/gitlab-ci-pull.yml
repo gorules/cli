@@ -1,7 +1,7 @@
 # GitLab CI template: pull a rules artifact and publish it to your own storage.
 #
 #   include:
-#     - remote: 'https://raw.githubusercontent.com/gorules/cli/cli-v0.2.1/templates/gitlab-ci-pull.yml'
+#     - remote: 'https://raw.githubusercontent.com/gorules/cli/cli-v0.3.0/templates/gitlab-ci-pull.yml' # x-release-please-version
 #
 #   pull:rules:
 #     extends: .gorules-pull

@@ -125,16 +125,29 @@ esac
 Pin the version in a pipeline rather than tracking `latest`:
 
 ```bash
-npx @gorules/cli@0.2.1 pull --project pricing --target env:production
+npx @gorules/cli@0.3.0 pull --project pricing --target env:production # x-release-please-version
 ```
 
 ## GitHub Actions
 
-Composite actions live under `actions/`, in this repository, so the tag you pin is the CLI version
-you get.
+The composite action lives at `actions/pull` **in this repository**, so the tag you pin is the CLI
+version you get. There is no separate marketplace listing to track.
+
+### Prerequisites
+
+- Nothing to install. The action runs the CLI through `npx`, and every GitHub-hosted runner already
+  ships Node and `jq`. On a **self-hosted runner** make sure both are on `PATH`.
+- A repository or environment secret holding the access token. A read-scoped project token is
+  enough — the CLI only ever downloads.
+
+### Minimal workflow
 
 ```yaml
+name: Pull rules
+
 on:
+  schedule:
+    - cron: '*/15 * * * *'
   workflow_dispatch:
     inputs:
       payload:
@@ -146,7 +159,7 @@ jobs:
   rules:
     runs-on: ubuntu-latest
     steps:
-      - uses: gorules/cli/actions/pull@cli-v0.2.1
+      - uses: gorules/cli/actions/pull@cli-v0.3.0 # x-release-please-version
         id: rules
         with:
           url: https://acme.us1.gorules.io
@@ -158,6 +171,8 @@ jobs:
       - run: aws s3 cp ./dist/ s3://my-bucket/rules/live/ --recursive
         if: steps.rules.outputs.changed == 'true'
 ```
+
+### Inputs
 
 | Input         | Required | Description                                                                      |
 | ------------- | -------- | -------------------------------------------------------------------------------- |
@@ -173,6 +188,8 @@ jobs:
 | `payload`     |          | BRMS event payload; auto-detected from `workflow_dispatch`, set only to override |
 | `cli-version` |          | Version of `@gorules/cli` to run                                                 |
 
+### Outputs
+
 | Output                           | Description                                                     |
 | -------------------------------- | --------------------------------------------------------------- |
 | `changed`                        | `false` when `current` still matched, so nothing was downloaded |
@@ -180,16 +197,105 @@ jobs:
 | `sha256`                         | Checksum of the downloaded artifact                             |
 | `files`                          | JSON array of paths written                                     |
 
-The token is passed to the CLI as an environment variable rather than an argument, and masked in the
-log. `changed` exists so a scheduled workflow can skip the upload when production has not moved.
+Outputs are read as `steps.<id>.outputs.<name>`, so the step needs an `id`. To use them in a
+**different job**, re-export them through the job's own `outputs` block:
+
+```yaml
+jobs:
+  rules:
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.rules.outputs.changed }}
+      version: ${{ steps.rules.outputs.version }}
+    steps:
+      - uses: gorules/cli/actions/pull@cli-v0.3.0 # x-release-please-version
+        id: rules
+        with:
+          url: https://acme.us1.gorules.io
+          token: ${{ secrets.GORULES_TOKEN }}
+          project: pricing
+          target: env:production
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rules
+          path: pricing
+
+  deploy:
+    needs: rules
+    if: needs.rules.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "deploying rules ${{ needs.rules.outputs.version }}"
+```
+
+### Baking rules into an image
+
+`unpack: true` writes the decision files as a directory instead of a zip, which is what you want
+for a `COPY` into a container:
+
+```yaml
+- uses: gorules/cli/actions/pull@cli-v0.3.0 # x-release-please-version
+  with:
+    url: https://acme.us1.gorules.io
+    token: ${{ secrets.GORULES_TOKEN }}
+    project: pricing
+    target: env:production
+    out: ./rules
+    name: '.' # extract straight into ./rules, no sub-directory
+    unpack: true
+    delete: true # mirror the target exactly; drop rules deleted upstream
+
+- run: docker build -t myapp:${{ github.sha }} .
+```
+
+### Skipping work when nothing moved
+
+Pass the release or commit id you already hold as `current`. The server answers "no change", the
+action downloads nothing and sets `changed=false` instead of failing:
+
+```yaml
+- uses: actions/cache@v4
+  id: state
+  with:
+    path: .rules-state
+    key: rules-${{ github.ref_name }}
+
+- id: prev
+  run: echo "id=$(cat .rules-state 2>/dev/null || echo '')" >> "$GITHUB_OUTPUT"
+
+- uses: gorules/cli/actions/pull@cli-v0.3.0 # x-release-please-version
+  id: rules
+  with:
+    url: https://acme.us1.gorules.io
+    token: ${{ secrets.GORULES_TOKEN }}
+    project: pricing
+    target: env:production
+    current: ${{ steps.prev.outputs.id }}
+
+- if: steps.rules.outputs.changed == 'true'
+  run: echo "${{ steps.rules.outputs.release }}" > .rules-state
+```
+
+The token is passed to the CLI as an environment variable rather than an argument — anything on a
+command line is visible to other processes and lands in traces — and is masked in the log.
 
 ## GitLab CI
 
-`templates/gitlab-ci-pull.yml` defines a hidden job you extend:
+`templates/gitlab-ci-pull.yml` defines a hidden job, `.gorules-pull`, that you `extends:`.
+
+### Prerequisites
+
+- Two CI/CD variables under **Settings → CI/CD → Variables**: `GORULES_URL` and `GORULES_TOKEN`.
+  Mark the token **Masked** and **Protected**. GitLab puts CI/CD variables into the job environment
+  automatically, so the CLI picks them up with no further wiring — the template never names them.
+- Nothing else. The job brings its own Node image.
+
+### Minimal pipeline
 
 ```yaml
 include:
-  - remote: 'https://raw.githubusercontent.com/gorules/cli/cli-v0.2.1/templates/gitlab-ci-pull.yml'
+  - remote: 'https://raw.githubusercontent.com/gorules/cli/cli-v0.3.0/templates/gitlab-ci-pull.yml' # x-release-please-version
 
 pull:rules:
   extends: .gorules-pull
@@ -205,17 +311,73 @@ publish:rules:
     - aws s3 cp dist/ s3://my-bucket/rules/live/ --recursive
 ```
 
-`GORULES_URL` and `GORULES_TOKEN` are CI/CD variables; mask and protect the token. GitLab puts them
-in the environment automatically, so nothing else is needed to wire them up. Optional job variables:
-`GORULES_OUT` (default `dist`), `GORULES_NAME`, `GORULES_CURRENT`, `GORULES_UNPACK` and
-`GORULES_DELETE` (both `'false'` by default), and `GORULES_CLI_VERSION`.
+### Job variables
 
-The job publishes `RULES_CHANGED`, `RULES_VERSION`, `RULES_RELEASE` and `RULES_SHA256` as a dotenv
-report, so later jobs read them as ordinary variables.
+Set these under the extending job's `variables:` block:
+
+| Variable              | Default   | Description                                              |
+| --------------------- | --------- | -------------------------------------------------------- |
+| `GORULES_PROJECT`     | —         | Project key or id; taken from the payload when triggered |
+| `GORULES_TARGET`      | `main`    | Target to resolve                                        |
+| `GORULES_OUT`         | `dist`    | Output directory, also the artifact path                 |
+| `GORULES_NAME`        | —         | Output file or sub-directory name                        |
+| `GORULES_UNPACK`      | `'false'` | `'true'` to extract the archive                          |
+| `GORULES_DELETE`      | `'false'` | With unpack, mirror the target exactly                   |
+| `GORULES_CURRENT`     | —         | Release or commit id already held                        |
+| `GORULES_CLI_VERSION` | pinned    | Version of `@gorules/cli` to run                         |
+
+Quote the booleans. GitLab variables are strings, and the template compares against the literal
+`true`.
+
+### Passing results downstream
+
+The job writes a **dotenv report**, so later jobs read the results as ordinary variables — no
+artifact parsing:
+
+| Variable        | Description                                    |
+| --------------- | ---------------------------------------------- |
+| `RULES_CHANGED` | `'true'` / `'false'`                           |
+| `RULES_VERSION` | Release version, when the target was a release |
+| `RULES_RELEASE` | Release id                                     |
+| `RULES_SHA256`  | Checksum of the downloaded artifact            |
+
+The pulled files are published as a job artifact at `$GORULES_OUT`, so a downstream job gets them
+by declaring `needs: ['pull:rules']`.
+
+### Scheduled pulls
+
+Create a pipeline schedule (**Build → Pipeline schedules**) and gate the job on it, so pushes do
+not re-pull:
+
+```yaml
+pull:rules:
+  extends: .gorules-pull
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+    - if: $CI_PIPELINE_SOURCE == "web"
+  variables:
+    GORULES_PROJECT: pricing
+    GORULES_TARGET: env:production
+    GORULES_CURRENT: $RULES_RELEASE_LAST # e.g. from a schedule variable
+```
 
 ## Azure Pipelines
 
-`templates/azure-pipelines-pull.yml` is a job template you can reference directly:
+`templates/azure-pipelines-pull.yml` is a **job** template, so you reference it under `jobs:`, not
+`steps:`.
+
+### Prerequisites
+
+- A **GitHub service connection** so the pipeline can resolve this repository as a template source,
+  declared under `resources.repositories`.
+- `GORULES_TOKEN` as a **secret** pipeline variable, or in a linked variable group. Azure does not
+  map secret variables into the process environment automatically — the template handles that by
+  naming it explicitly under the step's `env:`.
+- For blob upload, an **ARM service connection** (`azureSubscription`) whose identity has
+  _Storage Blob Data Contributor_ on the target account; the template uploads with `--auth-mode
+login`, not account keys.
+
+### Minimal pipeline
 
 ```yaml
 resources:
@@ -223,7 +385,7 @@ resources:
     - repository: gorules
       type: github
       name: gorules/cli
-      ref: refs/tags/cli-v0.2.1
+      ref: refs/tags/cli-v0.3.0 # x-release-please-version
       endpoint: <your GitHub service connection>
 
 jobs:
@@ -237,11 +399,62 @@ jobs:
       container: rules
 ```
 
-`GORULES_TOKEN` must exist as a secret pipeline variable or in a linked variable group. Azure
-DevOps does not map secret variables into the environment automatically, which the template handles
-by declaring it explicitly under `env:`.
+### Parameters
 
-The job sets `rulesChanged` and `rulesVersion` as pipeline variables for later stages to read.
+| Parameter           | Default                                   | Description                              |
+| ------------------- | ----------------------------------------- | ---------------------------------------- |
+| `url`               | —                                         | BRMS URL                                 |
+| `project`           | —                                         | Project key or id                        |
+| `target`            | `main`                                    | Target to resolve                        |
+| `out`               | `$(Build.ArtifactStagingDirectory)/rules` | Output directory                         |
+| `name`              | `''`                                      | Output file or sub-directory name        |
+| `unpack`            | `false`                                   | Extract the archive                      |
+| `delete`            | `false`                                   | With unpack, mirror the target exactly   |
+| `cliVersion`        | pinned                                    | Version of `@gorules/cli` to run         |
+| `azureSubscription` | `''`                                      | ARM service connection for blob upload   |
+| `storageAccount`    | `''`                                      | Target storage account                   |
+| `container`         | `''`                                      | Target container; blank skips the upload |
+| `prefix`            | `rules/live`                              | Blob path prefix                         |
+
+Leave `container` blank and the upload step is skipped entirely, which is what you want if you
+intend to consume the files some other way.
+
+### Reading the results
+
+The template sets `rulesChanged` and `rulesVersion` with `##vso[task.setvariable]`. These are
+visible to **later steps in the same job**. Azure does not carry them into other jobs or stages
+unless they are declared as job outputs, which this template does not currently do — so branch on
+them within the job, or upload the files as a pipeline artifact and let the next stage consume
+that instead.
+
+### Publishing the files instead of uploading to Blob Storage
+
+The default `out` is the artifact staging directory, but the template does not publish it. Add
+your own job that depends on the template's job if you want a pipeline artifact:
+
+```yaml
+jobs:
+  - template: templates/azure-pipelines-pull.yml@gorules
+    parameters:
+      url: https://acme.us1.gorules.io
+      project: pricing
+      target: env:production
+
+  - job: publish
+    dependsOn: gorules_pull
+    steps:
+      - task: PublishPipelineArtifact@1
+        inputs:
+          targetPath: $(Build.ArtifactStagingDirectory)/rules
+          artifact: rules
+```
+
+### Accepting BRMS-triggered runs
+
+For a webhook-driven run the pipeline must accept `GRL_PAYLOAD` at queue time: add a pipeline
+variable named `GRL_PAYLOAD` (any value) with **"Let users override this value when running this
+pipeline"** checked. Organizations with _Limit variables that can be set at queue time_ enabled —
+the default on newer organizations — reject the queue request otherwise.
 
 ## Triggered by BRMS
 
@@ -249,14 +462,18 @@ All three templates read `GRL_PAYLOAD` when it is present, which is what BRMS se
 triggers the pipeline. The project and target then come from the event rather than from static
 configuration, so one pipeline handles every project and environment:
 
-| System          | How the payload arrives                 |
-| --------------- | --------------------------------------- |
-| GitHub Actions  | `inputs.payload` on `workflow_dispatch` |
-| GitLab CI       | `GRL_PAYLOAD` pipeline variable         |
-| Azure Pipelines | `GRL_PAYLOAD` run variable              |
+| System          | How the payload arrives                 | What you must declare                           |
+| --------------- | --------------------------------------- | ----------------------------------------------- |
+| GitHub Actions  | `inputs.payload` on `workflow_dispatch` | A `payload` input on `workflow_dispatch`        |
+| GitLab CI       | `GRL_PAYLOAD` pipeline variable         | Nothing                                         |
+| Azure Pipelines | `GRL_PAYLOAD` run variable              | A queue-time-overridable `GRL_PAYLOAD` variable |
 
-Without it, the configured `GORULES_PROJECT` and `GORULES_TARGET` are used, so the same file also
-works for a manual or scheduled run.
+The payload carries `project.key` (or `projectId`) and `target`; each template reads those two
+fields and exports them as `GORULES_PROJECT` and `GORULES_TARGET`.
+
+Without a payload the configured project and target are used, so the same file also works for a
+manual or scheduled run. `project` is therefore only mandatory when you have no payload — declare
+it anyway unless the pipeline is webhook-only.
 
 ## MCP Bridge
 

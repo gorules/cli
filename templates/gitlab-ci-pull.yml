@@ -1,7 +1,7 @@
 # GitLab CI template: pull a rules artifact and publish it to your own storage.
 #
 #   include:
-#     - remote: 'https://raw.githubusercontent.com/gorules/cli/cli-v0.3.2/templates/gitlab-ci-pull.yml' # x-release-please-version
+#     - remote: 'https://raw.githubusercontent.com/gorules/cli/cli-v0.3.3/templates/gitlab-ci-pull.yml' # x-release-please-version
 #
 #   pull:rules:
 #     extends: .gorules-pull
@@ -21,7 +21,7 @@
   image: node:24-alpine
   variables:
     GORULES_OUT: dist
-    GORULES_CLI_VERSION: '0.3.2' # x-release-please-version
+    GORULES_CLI_VERSION: '0.3.3' # x-release-please-version
     GORULES_UNPACK: 'false'
     # 'true' deletes files in the destination that are not in the artifact
     GORULES_DELETE: 'false'

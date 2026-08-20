@@ -125,7 +125,7 @@ esac
 Pin the version in a pipeline rather than tracking `latest`:
 
 ```bash
-npx @gorules/cli@0.3.2 pull --project pricing --target env:production # x-release-please-version
+npx @gorules/cli@0.3.3 pull --project pricing --target env:production # x-release-please-version
 ```
 
 ## GitHub Actions
@@ -146,7 +146,7 @@ jobs:
   rules:
     runs-on: ubuntu-latest
     steps:
-      - uses: gorules/cli/actions/pull@cli-v0.3.2 # x-release-please-version
+      - uses: gorules/cli/actions/pull@cli-v0.3.3 # x-release-please-version
         id: rules
         with:
           url: https://acme.us1.gorules.io
@@ -192,7 +192,7 @@ log. `changed` exists so a scheduled workflow can skip the upload when productio
 
 ```yaml
 include:
-  - remote: 'https://raw.githubusercontent.com/gorules/cli/cli-v0.3.2/templates/gitlab-ci-pull.yml' # x-release-please-version
+  - remote: 'https://raw.githubusercontent.com/gorules/cli/cli-v0.3.3/templates/gitlab-ci-pull.yml' # x-release-please-version
 
 pull:rules:
   extends: .gorules-pull
@@ -229,7 +229,7 @@ resources:
     - repository: gorules
       type: github
       name: gorules/cli
-      ref: refs/tags/cli-v0.3.2 # x-release-please-version
+      ref: refs/tags/cli-v0.3.3 # x-release-please-version
       endpoint: <your GitHub service connection>
 
 jobs:

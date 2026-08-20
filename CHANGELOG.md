@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.3](https://github.com/gorules/cli/compare/cli-v0.3.2...cli-v0.3.3) (2026-08-20)
+
+
+### Bug Fixes
+
+* azure template pull only ([#13](https://github.com/gorules/cli/issues/13)) ([61e829b](https://github.com/gorules/cli/commit/61e829bebfa93647edae3401179aee621ae11be1))
+
 ## [0.3.2](https://github.com/gorules/cli/compare/cli-v0.3.1...cli-v0.3.2) (2026-08-20)
 
 

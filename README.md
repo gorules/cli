@@ -125,7 +125,7 @@ esac
 Pin the version in a pipeline rather than tracking `latest`:
 
 ```bash
-npx @gorules/cli@0.2.1 pull --project pricing --target env:production
+npx @gorules/cli@0.3.2 pull --project pricing --target env:production # x-release-please-version
 ```
 
 ## GitHub Actions
@@ -146,17 +146,19 @@ jobs:
   rules:
     runs-on: ubuntu-latest
     steps:
-      - uses: gorules/cli/actions/pull@cli-v0.2.1
+      - uses: gorules/cli/actions/pull@cli-v0.3.2 # x-release-please-version
         id: rules
         with:
           url: https://acme.us1.gorules.io
           token: ${{ secrets.GORULES_TOKEN }}
-          project: pricing
-          target: env:production
+          # project and target normally arrive in the BRMS payload; set them
+          # only for runs that have none (manual without payload, schedules)
           out: ./dist
 
-      - run: aws s3 cp ./dist/ s3://my-bucket/rules/live/ --recursive
-        if: steps.rules.outputs.changed == 'true'
+      - name: Deploy
+        env:
+          PROJECT: ${{ steps.rules.outputs.project }}
+        run: aws s3 cp "./dist/$PROJECT" "s3://my-bucket/rules/$PROJECT"
 ```
 
 | Input         | Required | Description                                                                      |
@@ -175,6 +177,7 @@ jobs:
 
 | Output                           | Description                                                     |
 | -------------------------------- | --------------------------------------------------------------- |
+| `project` / `target`             | What was pulled, payload-aware                                  |
 | `changed`                        | `false` when `current` still matched, so nothing was downloaded |
 | `release` / `version` / `commit` | What the target resolved to                                     |
 | `sha256`                         | Checksum of the downloaded artifact                             |
@@ -189,20 +192,19 @@ log. `changed` exists so a scheduled workflow can skip the upload when productio
 
 ```yaml
 include:
-  - remote: 'https://raw.githubusercontent.com/gorules/cli/cli-v0.2.1/templates/gitlab-ci-pull.yml'
+  - remote: 'https://raw.githubusercontent.com/gorules/cli/cli-v0.3.2/templates/gitlab-ci-pull.yml' # x-release-please-version
 
 pull:rules:
   extends: .gorules-pull
-  variables:
-    GORULES_PROJECT: pricing
-    GORULES_TARGET: env:production
+  # project and target normally arrive in the BRMS payload (GRL_PAYLOAD);
+  # set GORULES_PROJECT / GORULES_TARGET only for runs that have none
 
 publish:rules:
   needs: ['pull:rules']
-  rules:
-    - if: $RULES_CHANGED == "true"
   script:
-    - aws s3 cp dist/ s3://my-bucket/rules/live/ --recursive
+    # dotenv variables are not visible in rules: (evaluated before jobs run) -
+    # gate in script when using scheduled pulls with GORULES_CURRENT
+    - aws s3 cp "dist/$RULES_PROJECT" "s3://my-bucket/rules/$RULES_PROJECT"
 ```
 
 `GORULES_URL` and `GORULES_TOKEN` are CI/CD variables; mask and protect the token. GitLab puts them
@@ -217,7 +219,9 @@ anything.
 
 ## Azure Pipelines
 
-`templates/azure-pipelines-pull.yml` is a job template you can reference directly:
+`templates/azure-pipelines-pull.yml` is a steps template: it pulls the artifact and sets result
+variables (`rulesChanged`, `rulesProject`, `rulesTarget`, `rulesVersion`, `rulesRelease`,
+`rulesSha256`), and you append your own publish step in the same job:
 
 ```yaml
 resources:
@@ -225,18 +229,21 @@ resources:
     - repository: gorules
       type: github
       name: gorules/cli
-      ref: refs/tags/cli-v0.2.1
+      ref: refs/tags/cli-v0.3.2 # x-release-please-version
       endpoint: <your GitHub service connection>
 
 jobs:
-  - template: templates/azure-pipelines-pull.yml@gorules
-    parameters:
-      url: https://acme.us1.gorules.io
-      project: pricing
-      target: env:production
-      azureSubscription: <your ARM service connection>
-      storageAccount: acmerules
-      container: rules
+  - job: deploy_rules
+    pool:
+      vmImage: ubuntu-latest
+    steps:
+      - template: templates/azure-pipelines-pull.yml@gorules
+        parameters:
+          url: https://acme.us1.gorules.io
+          # project and target normally arrive in the BRMS payload (GRL_PAYLOAD)
+
+      - script: aws s3 cp "$(Build.ArtifactStagingDirectory)/rules/$(rulesProject)" "s3://my-bucket/rules/$(rulesProject)"
+        displayName: Deploy
 ```
 
 `GORULES_TOKEN` must exist as a secret pipeline variable or in a linked variable group. Azure

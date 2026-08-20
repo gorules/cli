@@ -142,7 +142,7 @@ export const sync = async (options: ApiOptions, deployments: SyncDeploymentReque
  */
 export const downloadArtifact = async (options: ApiOptions, artifact: SyncArtifact): Promise<Buffer> => {
   const isRelative = artifact.url.startsWith('/');
-  const url = isRelative ? `${options.url.replace(/\/api$/, '')}${artifact.url}` : artifact.url;
+  const url = isRelative ? `${options.url}${artifact.url}` : artifact.url;
 
   const response = await fetchWithRetry(
     url,

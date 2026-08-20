@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.2](https://github.com/gorules/cli/compare/cli-v0.3.1...cli-v0.3.2) (2026-08-20)
+
+
+### Bug Fixes
+
+* download relative artifact URLs against the API base ([#11](https://github.com/gorules/cli/issues/11)) ([c42c644](https://github.com/gorules/cli/commit/c42c644a7f792318254ea0d4e27625a04e5717dd))
+
 ## [0.3.1](https://github.com/gorules/cli/compare/cli-v0.3.0...cli-v0.3.1) (2026-08-20)
 
 

@@ -1,13 +1,13 @@
 # GitLab CI template: pull a rules artifact and publish it to your own storage.
 #
 #   include:
-#     - remote: 'https://raw.githubusercontent.com/gorules/cli/cli-v0.2.1/templates/gitlab-ci-pull.yml'
+#     - remote: 'https://raw.githubusercontent.com/gorules/cli/cli-v0.3.2/templates/gitlab-ci-pull.yml' # x-release-please-version
 #
 #   pull:rules:
 #     extends: .gorules-pull
-#     variables:
-#       GORULES_PROJECT: pricing
-#       GORULES_TARGET: env:production
+#     # project and target normally arrive in the BRMS webhook payload
+#     # (GRL_PAYLOAD); set GORULES_PROJECT / GORULES_TARGET only for runs
+#     # that have no payload, e.g. via the Run pipeline form or a schedule
 #
 # GORULES_URL and GORULES_TOKEN come from CI/CD variables; mask and protect the
 # token. GitLab puts CI/CD variables in the environment automatically, so the

@@ -210,8 +210,10 @@ in the environment automatically, so nothing else is needed to wire them up. Opt
 `GORULES_OUT` (default `dist`), `GORULES_NAME`, `GORULES_CURRENT`, `GORULES_UNPACK` and
 `GORULES_DELETE` (both `'false'` by default), and `GORULES_CLI_VERSION`.
 
-The job publishes `RULES_CHANGED`, `RULES_VERSION`, `RULES_RELEASE` and `RULES_SHA256` as a dotenv
-report, so later jobs read them as ordinary variables.
+The job publishes `RULES_CHANGED`, `RULES_PROJECT`, `RULES_TARGET`, `RULES_VERSION`,
+`RULES_RELEASE` and `RULES_SHA256` as a dotenv report, so later jobs read them as ordinary
+variables — a deploy job can route on the target (e.g. per-environment buckets) without parsing
+anything.
 
 ## Azure Pipelines
 

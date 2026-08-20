@@ -21,7 +21,7 @@
   image: node:20-alpine
   variables:
     GORULES_OUT: dist
-    GORULES_CLI_VERSION: '0.3.0' # x-release-please-version
+    GORULES_CLI_VERSION: '0.3.1' # x-release-please-version
     GORULES_UNPACK: 'false'
     # 'true' deletes files in the destination that are not in the artifact
     GORULES_DELETE: 'false'

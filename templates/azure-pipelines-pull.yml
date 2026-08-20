@@ -50,7 +50,7 @@ parameters:
     default: false
   - name: cliVersion
     type: string
-    default: 0.3.1 # x-release-please-version
+    default: 0.3.2 # x-release-please-version
   - name: azureSubscription
     type: string
     default: ''

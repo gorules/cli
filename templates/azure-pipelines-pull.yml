@@ -66,9 +66,9 @@ parameters:
 steps:
   # Microsoft-hosted images already ship Node; self-hosted agents may not.
   - task: NodeTool@0
-    displayName: Use Node 20
+    displayName: Use Node 24
     inputs:
-      versionSpec: '20.x'
+      versionSpec: '24.x'
 
   - script: |
       set -euo pipefail

@@ -18,7 +18,7 @@
 # and a webhook-driven one.
 
 .gorules-pull:
-  image: node:20-alpine
+  image: node:24-alpine
   variables:
     GORULES_OUT: dist
     GORULES_CLI_VERSION: '0.3.2' # x-release-please-version

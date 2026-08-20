@@ -49,6 +49,12 @@ inputs:
     default: 0.3.2 # x-release-please-version
 
 outputs:
+  project:
+    description: Project that was pulled, payload-aware
+    value: ${{ steps.pull.outputs.project }}
+  target:
+    description: Target that was pulled, payload-aware
+    value: ${{ steps.pull.outputs.target }}
   changed:
     description: 'false when the target still matches the current input, true when an artifact was downloaded'
     value: ${{ steps.pull.outputs.changed }}
@@ -115,6 +121,11 @@ runs:
         [ -n "$INPUT_CURRENT" ] && args+=(--current "$INPUT_CURRENT")
         [ "$INPUT_UNPACK" = "true" ] && args+=(--unpack)
         [ "$INPUT_DELETE" = "true" ] && args+=(--delete)
+
+        # The effective values, payload-aware, so a workflow routes on what
+        # was actually pulled instead of re-parsing the payload.
+        echo "project=$GORULES_PROJECT" >> "$GITHUB_OUTPUT"
+        echo "target=${GORULES_TARGET:-main}" >> "$GITHUB_OUTPUT"
 
         result="$RUNNER_TEMP/gorules-pull.json"
 

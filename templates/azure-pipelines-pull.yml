@@ -1,22 +1,26 @@
-# Azure Pipelines template: pull a rules artifact and publish it to Blob Storage.
+# Azure Pipelines steps template: pull a rules artifact for your own publish step.
 #
 #   resources:
 #     repositories:
 #       - repository: gorules
 #         type: github
 #         name: gorules/cli
-#         ref: refs/tags/cli-v0.2.1
+#         ref: refs/tags/cli-v0.3.2 # x-release-please-version
 #         endpoint: <your GitHub service connection>
 #
 #   jobs:
-#     - template: templates/azure-pipelines-pull.yml@gorules
-#       parameters:
-#         url: https://acme.us1.gorules.io
-#         project: pricing
-#         target: env:production
-#         container: rules
-#         storageAccount: acmerules
-#         azureSubscription: <your ARM service connection>
+#     - job: deploy_rules
+#       pool:
+#         vmImage: ubuntu-latest
+#       steps:
+#         - template: templates/azure-pipelines-pull.yml@gorules
+#           parameters:
+#             url: https://acme.us1.gorules.io
+#         - script: <publish $(Build.ArtifactStagingDirectory)/rules however you deploy>
+#
+# The template only pulls: it downloads the artifact and sets result variables
+# (rulesChanged, rulesProject, rulesTarget, rulesVersion, rulesRelease,
+# rulesSha256) for the steps you add after it. Publishing is yours.
 #
 # GORULES_TOKEN must exist as a secret variable, either in the pipeline or in a
 # linked variable group.
@@ -30,11 +34,14 @@
 parameters:
   - name: url
     type: string
+  # Project and target normally arrive in GRL_PAYLOAD; set them only for
+  # runs that have no payload (schedules), or pass them at queue time.
   - name: project
     type: string
+    default: ''
   - name: target
     type: string
-    default: main
+    default: ''
   - name: out
     type: string
     default: $(Build.ArtifactStagingDirectory)/rules
@@ -48,91 +55,68 @@ parameters:
   - name: delete
     type: boolean
     default: false
+  # Release or commit id already held; when unchanged, rulesChanged is 'false'
+  - name: current
+    type: string
+    default: ''
   - name: cliVersion
     type: string
     default: 0.3.2 # x-release-please-version
-  - name: azureSubscription
-    type: string
-    default: ''
-  - name: storageAccount
-    type: string
-    default: ''
-  - name: container
-    type: string
-    default: ''
-  - name: prefix
-    type: string
-    default: rules/live
 
-jobs:
-  - job: gorules_pull
-    displayName: Pull rules from GoRules
-    pool:
-      vmImage: ubuntu-latest
-    steps:
-      # Microsoft-hosted images already ship Node; self-hosted agents may not.
-      - task: NodeTool@0
-        displayName: Use Node 20
-        inputs:
-          versionSpec: '20.x'
+steps:
+  # Microsoft-hosted images already ship Node; self-hosted agents may not.
+  - task: NodeTool@0
+    displayName: Use Node 24
+    inputs:
+      versionSpec: '24.x'
 
-      - script: |
-          set -euo pipefail
+  - script: |
+      set -euo pipefail
 
-          # BRMS passes GRL_PAYLOAD when it triggers the run, so the same
-          # template serves a manual run and a webhook-driven one. On a manual
-          # run the macro below does not resolve and Azure leaves the literal
-          # '$(GRL_PAYLOAD)' in place, so that exact string means "not set".
-          if [ -n "${GRL_PAYLOAD:-}" ] && [ "${GRL_PAYLOAD}" != '$(GRL_PAYLOAD)' ]; then
-            GORULES_PROJECT=$(node -e 'const p=JSON.parse(process.env.GRL_PAYLOAD);process.stdout.write(p.project?.key||p.projectId||"")')
-            GORULES_TARGET=$(node -e 'const p=JSON.parse(process.env.GRL_PAYLOAD);process.stdout.write(p.target||"main")')
-            export GORULES_PROJECT GORULES_TARGET
-            echo "Triggered by BRMS: $GORULES_PROJECT $GORULES_TARGET"
-          fi
+      # BRMS passes GRL_PAYLOAD when it triggers the run. On a manual run the
+      # macro below does not resolve and Azure leaves the literal
+      # '$(GRL_PAYLOAD)' in place, so that exact string means "not set".
+      if [ -n "${GRL_PAYLOAD:-}" ] && [ "${GRL_PAYLOAD}" != '$(GRL_PAYLOAD)' ]; then
+        GORULES_PROJECT=$(node -e 'const p=JSON.parse(process.env.GRL_PAYLOAD);process.stdout.write(p.project?.key||p.projectId||"")')
+        GORULES_TARGET=$(node -e 'const p=JSON.parse(process.env.GRL_PAYLOAD);process.stdout.write(p.target||"main")')
+        export GORULES_PROJECT GORULES_TARGET
+        echo "Triggered by BRMS: $GORULES_PROJECT $GORULES_TARGET"
+      fi
 
-          args=(pull --out "${{ parameters.out }}" --json)
-          if [ -n "${{ parameters.name }}" ]; then args+=(--name "${{ parameters.name }}"); fi
-          if [ "${{ lower(parameters.unpack) }}" = "true" ]; then args+=(--unpack); fi
-          if [ "${{ lower(parameters.delete) }}" = "true" ]; then args+=(--delete); fi
+      args=(pull --out "${{ parameters.out }}" --json)
+      if [ -n "${{ parameters.name }}" ]; then args+=(--name "${{ parameters.name }}"); fi
+      if [ -n "${{ parameters.current }}" ]; then args+=(--current "${{ parameters.current }}"); fi
+      if [ "${{ lower(parameters.unpack) }}" = "true" ]; then args+=(--unpack); fi
+      if [ "${{ lower(parameters.delete) }}" = "true" ]; then args+=(--delete); fi
 
-          # Exit 3 means the target has not moved: a normal outcome, not a failure
-          set +e
-          npx --yes "@gorules/cli@${{ parameters.cliVersion }}" "${args[@]}" > result.json
-          code=$?
-          set -e
+      # Exit 3 means the target has not moved: a normal outcome, not a failure
+      set +e
+      npx --yes "@gorules/cli@${{ parameters.cliVersion }}" "${args[@]}" > result.json
+      code=$?
+      set -e
 
-          if [ "$code" -eq 3 ]; then
-            echo "##vso[task.setvariable variable=rulesChanged]false"
-            echo "Target unchanged, nothing downloaded."
-            exit 0
-          fi
-          [ "$code" -ne 0 ] && exit "$code"
+      # The effective values, payload-aware, for the steps that follow
+      echo "##vso[task.setvariable variable=rulesProject]${GORULES_PROJECT:-}"
+      echo "##vso[task.setvariable variable=rulesTarget]${GORULES_TARGET:-main}"
 
-          echo "##vso[task.setvariable variable=rulesChanged]true"
-          echo "##vso[task.setvariable variable=rulesVersion]$(node -p "require('./result.json').version || ''")"
-        displayName: gorules pull
-        env:
-          GORULES_URL: ${{ parameters.url }}
-          GORULES_PROJECT: ${{ parameters.project }}
-          GORULES_TARGET: ${{ parameters.target }}
-          # Secret variables are NOT mapped into the environment automatically;
-          # without this line the token is simply absent.
-          GORULES_TOKEN: $(GORULES_TOKEN)
-          # Empty on a manual run; set by BRMS when it queues the pipeline
-          GRL_PAYLOAD: $(GRL_PAYLOAD)
+      if [ "$code" -eq 3 ]; then
+        echo "##vso[task.setvariable variable=rulesChanged]false"
+        echo "Target unchanged, nothing downloaded."
+        exit 0
+      fi
+      [ "$code" -ne 0 ] && exit "$code"
 
-      - task: AzureCLI@2
-        displayName: Upload to Blob Storage
-        condition: and(succeeded(), eq(variables['rulesChanged'], 'true'), ne('${{ parameters.container }}', ''))
-        inputs:
-          azureSubscription: ${{ parameters.azureSubscription }}
-          scriptType: bash
-          scriptLocation: inlineScript
-          inlineScript: |
-            set -euo pipefail
-            az storage blob upload-batch \
-              --account-name "${{ parameters.storageAccount }}" \
-              --destination "${{ parameters.container }}/${{ parameters.prefix }}" \
-              --source "${{ parameters.out }}" \
-              --auth-mode login \
-              --overwrite
+      echo "##vso[task.setvariable variable=rulesChanged]true"
+      echo "##vso[task.setvariable variable=rulesVersion]$(node -p "require('./result.json').version || ''")"
+      echo "##vso[task.setvariable variable=rulesRelease]$(node -p "require('./result.json').release || ''")"
+      echo "##vso[task.setvariable variable=rulesSha256]$(node -p "require('./result.json').sha256 || ''")"
+    displayName: gorules pull
+    env:
+      GORULES_URL: ${{ parameters.url }}
+      GORULES_PROJECT: ${{ parameters.project }}
+      GORULES_TARGET: ${{ parameters.target }}
+      # Secret variables are NOT mapped into the environment automatically;
+      # without this line the token is simply absent.
+      GORULES_TOKEN: $(GORULES_TOKEN)
+      # Empty on a manual run; set by BRMS when it queues the pipeline
+      GRL_PAYLOAD: $(GRL_PAYLOAD)

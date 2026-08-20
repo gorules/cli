@@ -4,7 +4,12 @@
     ".": {
       "package-name": "@gorules/cli",
       "release-type": "node",
-      "extra-files": ["actions/pull/action.yml", "templates/gitlab-ci-pull.yml", "templates/azure-pipelines-pull.yml"]
+      "extra-files": [
+        "actions/pull/action.yml",
+        "templates/gitlab-ci-pull.yml",
+        "templates/azure-pipelines-pull.yml",
+        "README.md"
+      ]
     }
   }
 }

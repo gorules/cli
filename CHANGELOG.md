@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.1](https://github.com/gorules/cli/compare/cli-v0.3.0...cli-v0.3.1) (2026-08-20)
+
+
+### Bug Fixes
+
+* exclude generated CHANGELOG.md from prettier ([#8](https://github.com/gorules/cli/issues/8)) ([f6eed10](https://github.com/gorules/cli/commit/f6eed1020f7bbf35b735f151b3ae0ea3c6ce5746))
+* export RULES_PROJECT and RULES_TARGET in GitLab dotenv report ([#10](https://github.com/gorules/cli/issues/10)) ([1c422aa](https://github.com/gorules/cli/commit/1c422aa872da59dbb7a1e21dd551b932f3ff5ab1))
+
 ## [0.3.0](https://github.com/gorules/cli/compare/cli-v0.2.1...cli-v0.3.0) (2026-08-16)
 
 
